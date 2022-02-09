@@ -17,7 +17,7 @@ class Semaphore {
     });
   }
 
-  runNex() {
+  runNext() {
     if (!this.currentRequests.length) return;
     const req = this.currentRequests.shift();
     const { resolve, reject, functionToCall, args } = req;
@@ -35,4 +35,4 @@ class Semaphore {
 
 let sem = new Semaphore(2);
 
-sem.callFunction("fetch", "https://www.google.com");
+sem.callFunction(fetch, "https://www.google.com");
