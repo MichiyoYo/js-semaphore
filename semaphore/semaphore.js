@@ -1,62 +1,97 @@
 class Semaphore {
-  constructor(maxRunningRequests = 1) {
-    //limitator
-    this.maxRunningRequests = maxRunningRequests;
-    //queue of current requests
-    this.currentRequests = [];
-    //requests that are currently running
-    this.runningRequests = 0;
+  constructor(maxTasks) {
+    //max number of tasks allowed to run at the same time
+    this.maxTasks = maxTasks;
+    //queue of tasks to run
+    this.queue = [];
+    //current number of running tasks
+    this.runningTasks = 0;
   }
 
-  /**
-   * Adds a task to the currentRequest queue
-   * @param {*} functionToCall
-   * @param  {...any} args
-   * @returns
-   */
-  callFunction(functionToCall, ...args) {
-    return new Promise((resolve, reject) => {
-      this.currentRequests.push({
-        resolve,
-        reject,
-        functionToCall,
-        args,
+  //enqueue a new task
+  enqueue() {
+    //if number of running tasks is < max tasks
+    if (this.runningTasks < this.maxTasks) {
+      return new Promise((resolve) => {
+        resolve();
       });
-      this.runNext();
-    });
-  }
-
-  runNext() {
-    if (!this.currentRequests.length) return;
-    //extract first request from the queue
-    const req = this.currentRequests.shift();
-    //destructure request properties into variables
-    const { resolve, reject, functionToCall, args } = req;
-    console.log(req);
-    //increment number of running requests
-    this.runningRequests++;
-    //run request asyncronously
-
-    let task = functionToCall;
-    if (typeof task === "function") {
-      task(...args)
-        .then((res) => resolve(res))
-        .catch((err) => reject(err))
-        .finally(() => {
-          this.runningRequests--;
-          this.runNext();
-        });
+    } else {
+      //if max number of allowed tasks are running, adds the task to the queue to wait
+      return new Promise((resolve, reject) => {
+        this.queue.push({ resolve, reject });
+      });
     }
   }
 
-  fetch(url) {
-    return fetch(url);
+  dispatch() {
+    console.log("dispatching");
+    //if there is at least one task in the queue and # of running tasks is < than max
+    if (this.queue.length > 0 && this.runningTasks < this.maxTasks) {
+      //increment running tasks
+      this.runningTasks++;
+      //extract next task form the front of the queue
+      let promise = this.queue.shift();
+      //resolve the promise
+      promise.resolve();
+    }
+  }
+
+  //release semaphore
+  release() {
+    //decrement number of running tasks
+    this.runningTasks--;
+    //dispatch next task
+    console.log("releasing");
+    this.dispatch();
+  }
+
+  //empties queue and resets the semaphore
+  purge() {
+    if (this.queue.length > 0) {
+      for (let i = 0; i < this.queue.length; i++) {
+        this.queue[i].reject(new Error("Task has been purged"));
+      }
+      //empty queue
+      this.queue = [];
+      //reset number of running tasks
+      this.runningTasks = 0;
+    }
   }
 }
 
 let sem = new Semaphore(2);
 
-sem.callFunction("fetch", "https://www.google.com");
-sem.callFunction("fetch", "https://www.facebook.com");
-sem.callFunction("fetch", "https://www.amazon.com");
-sem.callFunction("fetch", "https://www.netflix.com");
+async function test(id) {
+  try {
+    //returns a promise
+    await sem.enqueue();
+    console.log(`enqueuing task ${id}`);
+    setTimeout(() => {
+      sem.release();
+      console.log(`task ${id} releases the semaphore`);
+    }, 2000);
+  } catch (err) {
+    console.error(id, err);
+  }
+}
+
+test(1);
+test(2);
+test(3);
+test(4);
+
+setTimeout(() => {
+  test(10);
+  test(11);
+  test(12);
+}, 1500);
+
+// setTimeout(() => {
+//   test(20);
+//   test(21);
+//   test(22);
+// }, 2700);
+
+// setTimeout(() => {
+//   sem.purge();
+// }, 2000);
